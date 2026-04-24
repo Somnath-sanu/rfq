@@ -4,7 +4,6 @@ import { useState } from "react";
 import { IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,6 +34,17 @@ import { AuctionLists } from "./auction-lists";
 
 type ExtensionTrigger = "bid_received" | "any_rank_change" | "l1_rank_change";
 type FormErrors = Partial<Record<string, string>>;
+
+function MetricPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="surface-panel flex min-h-16 items-center justify-between gap-4 rounded-2xl px-5 py-3 border border-white/10 shadow">
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <span className="font-sans text-xl font-semibold tracking-tight">
+        {value}
+      </span>
+    </div>
+  );
+}
 
 function parseLocalDateTime(value: FormDataEntryValue | null) {
   return typeof value === "string" && value ? new Date(value).getTime() : NaN;
@@ -150,60 +160,47 @@ export function RfqListing() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="app-shell text-foreground">
       <Header />
 
-      <section className="border-b bg-muted/30">
-        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[1fr_420px]">
-          <div className="flex flex-col justify-end gap-4">
-            <Badge className="w-fit" variant="outline">
-              Live reverse auction workspace
-            </Badge>
-            <div className="max-w-3xl">
-              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+      <section className="border-b border-white/10">
+        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[1fr_360px]">
+          <div className="flex flex-col justify-end gap-5">
+            <div className="max-w-2xl">
+              <h1 className="font-heading text-4xl font-normal leading-tight tracking-tight md:text-5xl">
                 Manage RFQs, bids, rankings, and extension activity in real
                 time.
               </h1>
-              <p className="mt-3 text-muted-foreground">
+              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
                 Convex subscriptions keep current close times, L1 price, and
                 supplier rankings fresh without WebSocket or Redis plumbing.
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Card size="sm">
-              <CardHeader>
-                <CardDescription>Auctions</CardDescription>
-                <CardTitle>{rfqs?.length ?? "-"}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card size="sm">
-              <CardHeader>
-                <CardDescription>Live</CardDescription>
-                <CardTitle>
-                  {rfqs?.filter((rfq) => rfq.derivedStatus === "active")
-                    .length ?? "-"}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card size="sm">
-              <CardHeader>
-                <CardDescription>Extensions</CardDescription>
-                <CardTitle>
-                  {rfqs?.reduce((sum, rfq) => sum + rfq.extensionCount, 0) ??
-                    "-"}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+          <div className="grid content-end gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <MetricPill label="Auctions" value={rfqs?.length ?? "-"} />
+            <MetricPill
+              label="Live"
+              value={
+                rfqs?.filter((rfq) => rfq.derivedStatus === "active").length ??
+                "-"
+              }
+            />
+            <MetricPill
+              label="Extensions"
+              value={
+                rfqs?.reduce((sum, rfq) => sum + rfq.extensionCount, 0) ?? "-"
+              }
+            />
           </div>
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[420px_1fr]">
-        <Card className="h-fit">
+      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[390px_1fr]">
+        <Card className="surface-panel h-fit rounded-2xl">
           <CardHeader>
-            <CardTitle>Create British Auction</CardTitle>
-            <CardDescription>
+            <CardTitle className="font-sans text-2xl">Create British Auction</CardTitle>
+            <CardDescription className="text-base">
               Start time is locked to the current time when the RFQ is created.
             </CardDescription>
           </CardHeader>
@@ -229,6 +226,7 @@ export function RfqListing() {
                     id="referenceId"
                     name="referenceId"
                     key={defaults.referenceId}
+                    readOnly
                     value={defaults.referenceId}
                     className="cursor-not-allowed"
                   />
@@ -353,7 +351,7 @@ export function RfqListing() {
                 ) : null}
 
                 <Button
-                  className="w-full cursor-pointer"
+                  className="h-11 w-full cursor-pointer text-base"
                   disabled={isSaving}
                   type="submit"
                 >

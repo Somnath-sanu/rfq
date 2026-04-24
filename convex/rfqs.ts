@@ -75,6 +75,7 @@ export const get = query({
 
     const enrichedBids = bids.map((bid, index) => ({
       ...bid,
+      supplierTokenIdentifier: null,
       rank: index + 1,
       supplierName: bid.supplierName ?? bid.supplierEmail ?? "Supplier",
       supplierEmail: bid.supplierEmail,
@@ -85,6 +86,7 @@ export const get = query({
     return {
       rfq: {
         ...rfq,
+        createdByTokenIdentifier: null,
         derivedStatus: statusForTimes(
           Date.now(),
           rfq.bidStartAt,

@@ -32,6 +32,7 @@ import { dateTime, money, statusVariant, toDateTimeLocal } from "@/lib/utils";
 import { ActivityLogs } from "./activity-logs";
 import { AuctionConfig } from "./auction-config";
 import { Ranking } from "./ranking";
+import { Loader2 } from "lucide-react";
 
 type BidForm = {
   carrierName: string;
@@ -156,9 +157,9 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
 
   if (details === undefined) {
     return (
-      <main className="min-h-screen bg-background px-6 py-10 text-foreground">
+      <main className="min-h-screen w-full flex items-center justify-center bg-background px-6 py-10 text-foreground">
         <div className="mx-auto max-w-7xl text-muted-foreground">
-          Loading RFQ...
+          <Loader2 className="animate-spin size-8"/>
         </div>
       </main>
     );
@@ -169,7 +170,7 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
       <main className="min-h-screen bg-background px-6 py-10 text-foreground">
         <div className="mx-auto max-w-7xl">
           <Button asChild variant="outline">
-            <Link href="/">
+            <Link href="/auctions">
               <IconArrowLeft />
               Back to auctions
             </Link>
@@ -189,12 +190,12 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
   const canSubmit = isActive && !isSaving;
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="app-shell text-foreground">
       <Header />
-      <section className="border-b bg-muted/30">
-        <div className="mx-auto max-w-7xl px-6 py-7">
+      <section className="border-b border-white/10">
+        <div className="mx-auto max-w-6xl px-6 py-8">
           <Button asChild size="sm" variant="outline">
-            <Link href="/">
+            <Link href="/auctions">
               <IconArrowLeft />
               Back to auctions
             </Link>
@@ -202,7 +203,7 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
           <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-semibold tracking-tight">
+                <h1 className="font-heading text-4xl font-normal leading-tight tracking-tight md:text-5xl">
                   {rfq.name}
                 </h1>
                 <Badge
@@ -212,41 +213,41 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
                   {rfq.derivedStatus.replace("_", " ")}
                 </Badge>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 text-base text-muted-foreground">
                 {rfq.referenceId}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 w-full">
-              <Card size="sm">
+            <div className="grid w-full grid-cols-2 gap-3 lg:max-w-xl lg:grid-cols-2">
+              <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription>Current L1</CardDescription>
-                  <CardTitle>
+                  <CardDescription className="text-sm">Current L1</CardDescription>
+                  <CardTitle className="font-sans text-xl">
                     {rfq.currentLowestAmount === undefined
                       ? "No bids"
                       : money.format(rfq.currentLowestAmount)}
                   </CardTitle>
                 </CardHeader>
               </Card>
-              <Card size="sm">
+              <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription>Current close</CardDescription>
-                  <CardTitle className="text-sm">
+                  <CardDescription className="text-sm">Current close</CardDescription>
+                  <CardTitle className="font-sans text-base">
                     {dateTime.format(new Date(rfq.currentBidCloseAt))}
                   </CardTitle>
                 </CardHeader>
               </Card>
-              <Card size="sm">
+              <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription>Forced close</CardDescription>
-                  <CardTitle className="text-sm">
+                  <CardDescription className="text-sm">Forced close</CardDescription>
+                  <CardTitle className="font-sans text-base">
                     {dateTime.format(new Date(rfq.forcedBidCloseAt))}
                   </CardTitle>
                 </CardHeader>
               </Card>
-              <Card size="sm">
+              <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription>Extensions</CardDescription>
-                  <CardTitle>{rfq.extensionCount}</CardTitle>
+                  <CardDescription className="text-sm">Extensions</CardDescription>
+                  <CardTitle className="font-sans text-xl">{rfq.extensionCount}</CardTitle>
                 </CardHeader>
               </Card>
             </div>
@@ -254,14 +255,14 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[400px_1fr]">
+      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[390px_1fr]">
         <div className="grid h-fit gap-6">
-          <Card>
+          <Card className="surface-panel rounded-2xl">
             <CardHeader>
-              <CardTitle>
+              <CardTitle className="font-sans text-2xl">
                 {currentUserBid ? "Update Your Quote" : "Submit Quote"}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-base">
                 Suppliers keep one live quote per RFQ and may lower it while
                 bidding is active.
               </CardDescription>
@@ -270,7 +271,9 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
               <form action={submitFromForm}>
                 <FieldGroup>
                   <Field data-invalid={Boolean(errors.carrierName)}>
-                    <FieldLabel htmlFor="carrierName">Carrier name</FieldLabel>
+                    <FieldLabel className="text-base" htmlFor="carrierName">
+                      Carrier name
+                    </FieldLabel>
                     <Input
                       aria-invalid={Boolean(errors.carrierName)}
                       disabled={!isActive}
@@ -369,7 +372,7 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
                   </div>
 
                   <Field data-invalid={Boolean(errors.transitTime)}>
-                    <FieldLabel htmlFor="transitTime">
+                    <FieldLabel className="text-base" htmlFor="transitTime">
                       Transit time (days)
                     </FieldLabel>
                     <Input
@@ -417,7 +420,7 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
                   ) : null}
 
                   <Button
-                    className="w-full"
+                    className="h-11 w-full text-base"
                     disabled={!canSubmit}
                     type="submit"
                   >

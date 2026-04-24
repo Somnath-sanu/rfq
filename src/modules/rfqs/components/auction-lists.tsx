@@ -18,6 +18,7 @@ import Link from "next/link";
 import { IconClock, IconTrendingDown } from "@tabler/icons-react";
 import { dateTime, money, statusVariant } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 interface AuctionListsProps {
   rfqs:
@@ -29,49 +30,51 @@ interface AuctionListsProps {
 
 export const AuctionLists = ({ rfqs }: AuctionListsProps) => {
   return (
-    <Card>
+    <Card className="surface-panel h-fit rounded-2xl">
       <CardHeader>
-        <CardTitle>Auction Listing</CardTitle>
-        <CardDescription>
+        <CardTitle className="font-sans text-2xl">Auction Listing</CardTitle>
+        <CardDescription className="text-base">
           British auctions sorted by most recently created.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>RFQ</TableHead>
-              <TableHead>Lowest bid</TableHead>
-              <TableHead>Current close</TableHead>
-              <TableHead>Forced close</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Bids</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rfqs === undefined ? (
+      <CardContent className="w-full">
+        <ScrollArea className="min-h-0 rounded-xl">
+          <Table className="w-full text-base [&_td]:whitespace-normal [&_th]:whitespace-normal">
+            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
+              <TableRow>
+                <TableHead className="h-12">RFQ</TableHead>
+                <TableHead>Lowest bid</TableHead>
+                <TableHead>Current close</TableHead>
+                <TableHead>Forced close</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Bids</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rfqs === undefined ? (
               <TableRow>
                 <TableCell className="py-10 text-muted-foreground" colSpan={6}>
                   Loading auctions...
                 </TableCell>
               </TableRow>
-            ) : rfqs.length === 0 ? (
+              ) : rfqs.length === 0 ? (
               <TableRow>
                 <TableCell className="py-10 text-muted-foreground" colSpan={6}>
                   No British auctions yet.
                 </TableCell>
               </TableRow>
-            ) : (
+              ) : (
               rfqs.map((rfq) => (
                 <TableRow key={rfq._id}>
                   <TableCell>
                     <Link
-                      className="font-medium hover:underline"
+                      className="text-base font-semibold hover:underline"
                       href={`/rfqs/${rfq._id}`}
+                      prefetch
                     >
                       {rfq.name}
                     </Link>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="pt-1 text-sm text-muted-foreground">
                       {rfq.referenceId}
                     </div>
                   </TableCell>
@@ -103,9 +106,11 @@ export const AuctionLists = ({ rfqs }: AuctionListsProps) => {
                   <TableCell className="text-right">{rfq.bidCount}</TableCell>
                 </TableRow>
               ))
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </CardContent>
     </Card>
   );

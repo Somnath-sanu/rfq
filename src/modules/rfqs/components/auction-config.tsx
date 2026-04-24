@@ -24,14 +24,16 @@ export const AuctionConfig = ({
   config: Doc<"auctionConfigs"> | null;
 }) => {
   return (
-    <Card>
+    <Card className="surface-panel rounded-2xl">
       <CardHeader>
-        <CardTitle>Auction Configuration</CardTitle>
-        <CardDescription>Extension settings for this RFQ.</CardDescription>
+        <CardTitle className="font-sans text-2xl">Auction Configuration</CardTitle>
+        <CardDescription className="text-base">
+          Extension settings for this RFQ.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {config ? (
-          <dl className="grid gap-3 text-sm">
+          <dl className="grid gap-4 text-base">
             <div className="flex justify-between gap-3 border-b pb-2">
               <dt className="text-muted-foreground">Trigger window X</dt>
               <dd className="font-medium">

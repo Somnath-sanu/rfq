@@ -33,10 +33,10 @@ export const ActivityLogs = ({
   logs: Doc<"auctionActivityLogs">[];
 }) => {
   return (
-    <Card>
+    <Card className="surface-panel rounded-2xl">
       <CardHeader>
-        <CardTitle>Activity Log</CardTitle>
-        <CardDescription>
+        <CardTitle className="font-sans text-2xl">Activity Log</CardTitle>
+        <CardDescription className="text-base">
           Bid submissions, quote updates, extensions, and close events.
         </CardDescription>
       </CardHeader>
@@ -49,16 +49,16 @@ export const ActivityLogs = ({
           ) : (
             logs.map((log) => (
               <li
-                className="grid grid-cols-[32px_1fr] gap-3 rounded-lg border bg-muted/20 p-3"
+                className="grid grid-cols-[40px_1fr] gap-4 rounded-2xl border bg-background/45 p-4"
                 key={log._id}
               >
-                <span className="flex size-8 items-center justify-center rounded-lg bg-background ring-1 ring-border">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-background ring-1 ring-border">
                   {activityIcon(log.type)}
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{log.message}</p>
-                    <time className="text-xs text-muted-foreground">
+                    <p className="text-base font-medium">{log.message}</p>
+                    <time className="text-sm text-muted-foreground">
                       {dateTime.format(new Date(log.createdAt))}
                     </time>
                   </div>
