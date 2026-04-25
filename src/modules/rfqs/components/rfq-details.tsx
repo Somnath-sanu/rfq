@@ -53,7 +53,7 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
     resolver: zodResolver(bidFormSchema),
     mode: "onChange",
     defaultValues: {
-      carrierName: "Prime Carrier Lines",
+      carrierName: "",
       freightCharges: 4200,
       originCharges: 700,
       destinationCharges: 650,

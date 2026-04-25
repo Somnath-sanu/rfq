@@ -92,3 +92,9 @@ export function formatTrigger(trigger: string): string {
   }
   return "L1 bidder changed in trigger window";
 }
+
+export const formatMoney = (v: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(v);

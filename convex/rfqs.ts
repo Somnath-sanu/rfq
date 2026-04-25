@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
   assertPositiveMoney,
+  formatMoney,
   formatTrigger,
   getBidCount,
   getRankedBids,
@@ -233,7 +234,10 @@ export const submitBid = mutation({
     });
 
     const supplierName =
-      identity.name ?? identity.nickname ?? identity.givenName;
+      identity.name ??
+      identity.nickname ??
+      identity.givenName ??
+      args.carrierName;
     const supplierEmail = identity.email;
     const now = Date.now();
     const rfq = await ctx.db.get(args.rfqId);
@@ -372,8 +376,8 @@ export const submitBid = mutation({
       actorTokenIdentifier: identity.tokenIdentifier,
       type: existingBid ? "bid_updated" : "bid_submitted",
       message: `${supplierName ?? supplierEmail ?? "Supplier"} ${
-        existingBid ? "updated" : "submitted"
-      } ${totalAmount.toFixed(2)}.`,
+        existingBid ? "update their bid to " : "submitted"
+      } ${formatMoney(totalAmount)}.`,
       createdAt: now,
     });
 
