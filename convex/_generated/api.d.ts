@@ -10,6 +10,7 @@
 
 import type * as crons from "../crons.js";
 import type * as internalMutations from "../internalMutations.js";
+import type * as rateLimiter from "../rateLimiter.js";
 import type * as rfqHelpers from "../rfqHelpers.js";
 import type * as rfqTypes from "../rfqTypes.js";
 import type * as rfqs from "../rfqs.js";
@@ -23,6 +24,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   internalMutations: typeof internalMutations;
+  rateLimiter: typeof rateLimiter;
   rfqHelpers: typeof rfqHelpers;
   rfqTypes: typeof rfqTypes;
   rfqs: typeof rfqs;
@@ -54,4 +56,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};

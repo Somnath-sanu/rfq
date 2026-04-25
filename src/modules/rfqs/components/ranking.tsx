@@ -48,7 +48,10 @@ export const Ranking = ({ bids }: RankingProps) => {
         {bids.length > 0 ? (
           <div className="mb-6 grid gap-4 md:grid-cols-3">
             {bids.slice(0, 3).map((bid) => (
-              <div className="rounded-2xl border bg-background/45 p-5" key={bid._id}>
+              <div
+                className="rounded-2xl border bg-background/45 p-5"
+                key={bid._id}
+              >
                 <div className="flex items-center justify-between gap-3">
                   <Badge variant={bid.rank === 1 ? "default" : "outline"}>
                     <IconMedal />L{bid.rank}
@@ -68,8 +71,8 @@ export const Ranking = ({ bids }: RankingProps) => {
           </div>
         ) : null}
 
-        <ScrollArea className=" rounded-xl">
-          <Table className="min-w-226 text-base">
+        <ScrollArea className="rounded-xl min-h-0">
+          <Table className="min-w-230 w-full text-base">
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
               <TableRow>
                 <TableHead className="h-12">Rank</TableHead>
@@ -83,46 +86,51 @@ export const Ranking = ({ bids }: RankingProps) => {
             </TableHeader>
             <TableBody>
               {bids.length === 0 ? (
-              <TableRow>
-                <TableCell className="py-10 text-muted-foreground" colSpan={7}>
-                  No supplier bids yet.
-                </TableCell>
-              </TableRow>
-              ) : (
-              bids.map((bid) => (
-                <TableRow key={bid._id}>
-                  <TableCell>
-                    <Badge variant={bid.rank === 1 ? "default" : "outline"}>
-                      L{bid.rank}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{bid.supplierName}</div>
-                    <div className="flex gap-2 text-xs text-muted-foreground">
-                      {bid.supplierEmail}
-                      {bid.isCurrentUserBid ? (
-                        <span className="font-medium text-foreground">You</span>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>{bid.carrierName}</TableCell>
-                  <TableCell className="text-xs leading-5 text-muted-foreground">
-                    F {money.format(bid.freightCharges)}
-                    <br />O {money.format(bid.originCharges)}
-                    <br />D {money.format(bid.destinationCharges)}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center gap-1 font-semibold">
-                      <IconTrendingDown className="size-4 text-muted-foreground" />
-                      {money.format(bid.totalAmount)}
-                    </span>
-                  </TableCell>
-                  <TableCell>{bid.transitTime}</TableCell>
-                  <TableCell>
-                    {dateTime.format(new Date(bid.quoteValidityAt))}
+                <TableRow>
+                  <TableCell
+                    className="py-10 text-muted-foreground"
+                    colSpan={7}
+                  >
+                    No supplier bids yet.
                   </TableCell>
                 </TableRow>
-              ))
+              ) : (
+                bids.map((bid) => (
+                  <TableRow key={bid._id}>
+                    <TableCell>
+                      <Badge variant={bid.rank === 1 ? "default" : "outline"}>
+                        L{bid.rank}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{bid.supplierName}</div>
+                      <div className="flex gap-2 text-xs text-muted-foreground">
+                        {bid.supplierEmail}
+                        {bid.isCurrentUserBid ? (
+                          <span className="font-medium text-foreground">
+                            You
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>{bid.carrierName}</TableCell>
+                    <TableCell className="text-xs leading-5 text-muted-foreground">
+                      F {money.format(bid.freightCharges)}
+                      <br />O {money.format(bid.originCharges)}
+                      <br />D {money.format(bid.destinationCharges)}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1 font-semibold">
+                        <IconTrendingDown className="size-4 text-muted-foreground" />
+                        {money.format(bid.totalAmount)}
+                      </span>
+                    </TableCell>
+                    <TableCell>{bid.transitTime}</TableCell>
+                    <TableCell>
+                      {dateTime.format(new Date(bid.quoteValidityAt))}
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>

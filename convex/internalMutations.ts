@@ -10,7 +10,7 @@ export const activateScheduledAuctions = internalMutation({
       .withIndex("by_status_and_bidStartAt", (q) =>
         q.eq("status", "scheduled").lte("bidStartAt", now),
       )
-      .take(50);
+      .take(100);
 
     for (const rfq of due) {
       const status = statusForTimes(

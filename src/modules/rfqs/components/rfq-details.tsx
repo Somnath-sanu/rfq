@@ -2,11 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  IconArrowLeft,
-  IconEdit,
-  IconSend,
-} from "@tabler/icons-react";
+import { IconArrowLeft, IconEdit, IconSend } from "@tabler/icons-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -33,133 +29,66 @@ import { ActivityLogs } from "./activity-logs";
 import { AuctionConfig } from "./auction-config";
 import { Ranking } from "./ranking";
 import { Loader2 } from "lucide-react";
+import { bidFormSchema } from "../lib/bid-form-schema";
+import { z } from "zod";
+import { useForm, Controller, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import { ConvexError } from "convex/values";
+import { formatDuration, intervalToDuration } from "date-fns";
 
-type BidForm = {
-  carrierName: string;
-  freightCharges: string;
-  originCharges: string;
-  destinationCharges: string;
-  transitTime: number;
-  quoteValidityAt: string;
-};
-
-type FormErrors = Partial<Record<keyof BidForm | "total", string>>;
-
-function parseAmount(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : NaN;
-}
-
-function validateBidForm(form: BidForm, existingTotal?: number) {
-  const errors: FormErrors = {};
-  const freightCharges = parseAmount(form.freightCharges);
-  const originCharges = parseAmount(form.originCharges);
-  const destinationCharges = parseAmount(form.destinationCharges);
-  const quoteValidityAt = new Date(form.quoteValidityAt).getTime();
-  const total = freightCharges + originCharges + destinationCharges;
-
-  if (!form.carrierName.trim()) {
-    errors.carrierName = "Carrier name is required.";
-  }
-  if (!Number.isFinite(freightCharges) || freightCharges < 0) {
-    errors.freightCharges = "Freight charges must be zero or greater.";
-  }
-  if (!Number.isFinite(originCharges) || originCharges < 0) {
-    errors.originCharges = "Origin charges must be zero or greater.";
-  }
-  if (!Number.isFinite(destinationCharges) || destinationCharges < 0) {
-    errors.destinationCharges = "Destination charges must be zero or greater.";
-  }
-  if (!form.transitTime) {
-    errors.transitTime = "Transit time is required.";
-  }
-  if (!Number.isFinite(quoteValidityAt) || quoteValidityAt <= Date.now()) {
-    errors.quoteValidityAt = "Quote validity must be in the future.";
-  }
-  if (existingTotal !== undefined && total > existingTotal) {
-    errors.total = "Updated bids must keep or lower your current total.";
-  }
-
-  return errors;
-}
+type BidFormValues = z.infer<typeof bidFormSchema>;
 
 export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
   const details = useQuery(api.rfqs.get, { rfqId });
   const submitBid = useMutation(api.rfqs.submitBid);
-  const [errors, setErrors] = useState<FormErrors>({});
+
   const [serverError, setServerError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [form, setForm] = useState<BidForm>(() => ({
-    carrierName: "Prime Carrier Lines",
-    freightCharges: "4200",
-    originCharges: "700",
-    destinationCharges: "650",
-    transitTime: 5,
-    quoteValidityAt: toDateTimeLocal(
-      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    ),
-  }));
+
   const currentUserBid = details?.currentUserBid;
 
+  const now = new Date();
+
+  const form = useForm<BidFormValues>({
+    resolver: zodResolver(bidFormSchema),
+    mode: "onChange",
+    defaultValues: {
+      carrierName: "Prime Carrier Lines",
+      freightCharges: 4200,
+      originCharges: 700,
+      destinationCharges: 650,
+      transitTime: 5,
+      quoteValidityAt: toDateTimeLocal(
+        new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
+      ),
+    },
+  });
+
   useEffect(() => {
-    const bid = currentUserBid;
-    if (!bid) {
-      return;
-    }
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-      setForm({
-        carrierName: bid.carrierName,
-        freightCharges: String(bid.freightCharges),
-        originCharges: String(bid.originCharges),
-        destinationCharges: String(bid.destinationCharges),
-        transitTime: Number(bid.transitTime),
-        quoteValidityAt: toDateTimeLocal(new Date(bid.quoteValidityAt)),
-      });
+    if (!currentUserBid) return;
+
+    form.reset({
+      carrierName: currentUserBid.carrierName,
+      freightCharges: currentUserBid.freightCharges,
+      originCharges: currentUserBid.originCharges,
+      destinationCharges: currentUserBid.destinationCharges,
+      transitTime: currentUserBid.transitTime,
+      quoteValidityAt: toDateTimeLocal(
+        new Date(currentUserBid.quoteValidityAt),
+      ),
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUserBid]);
+  }, [currentUserBid, form]);
 
-  async function submitFromForm() {
-    const existingTotal = details?.currentUserBid?.totalAmount;
-    const nextErrors = validateBidForm(form, existingTotal);
-    setErrors(nextErrors);
-    setServerError(null);
-
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await submitBid({
-        rfqId,
-        carrierName: form.carrierName,
-        freightCharges: Number(form.freightCharges),
-        originCharges: Number(form.originCharges),
-        destinationCharges: Number(form.destinationCharges),
-        transitTime: form.transitTime,
-        quoteValidityAt: new Date(form.quoteValidityAt).getTime(),
-      });
-    } catch (caught) {
-      setServerError(
-        caught instanceof Error ? caught.message : "Unable to submit bid.",
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  }
+  const [freight, origin, destination] = useWatch({
+    control: form.control,
+    name: ["freightCharges", "originCharges", "destinationCharges"],
+  });
 
   if (details === undefined) {
     return (
       <main className="min-h-screen w-full flex items-center justify-center bg-background px-6 py-10 text-foreground">
         <div className="mx-auto max-w-7xl text-muted-foreground">
-          <Loader2 className="animate-spin size-8"/>
+          <Loader2 className="animate-spin size-8" />
         </div>
       </main>
     );
@@ -183,17 +112,97 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
 
   const { rfq, config, bids, logs } = details;
   const isActive = rfq.derivedStatus === "active" && rfq.status === "active";
-  const totalPreview =
-    parseAmount(form.freightCharges) +
-    parseAmount(form.originCharges) +
-    parseAmount(form.destinationCharges);
-  const canSubmit = isActive && !isSaving;
+
+  const total = (freight ?? 0) + (origin ?? 0) + (destination ?? 0);
+  const existingTotal = currentUserBid?.totalAmount;
+
+  async function onSubmit(values: BidFormValues) {
+    setServerError(null);
+
+    const total =
+      values.freightCharges + values.originCharges + values.destinationCharges;
+
+    if (existingTotal !== undefined && total > existingTotal) {
+      form.setError("freightCharges", {
+        message: "You can only lower your bid",
+      });
+      return;
+    }
+
+    if (currentUserBid) {
+      const prev = {
+        carrierName: currentUserBid.carrierName,
+        freightCharges: currentUserBid.freightCharges,
+        originCharges: currentUserBid.originCharges,
+        destinationCharges: currentUserBid.destinationCharges,
+        transitTime: currentUserBid.transitTime,
+        quoteValidityAt: currentUserBid.quoteValidityAt,
+      };
+
+      const next = {
+        ...values,
+        quoteValidityAt: new Date(values.quoteValidityAt).getTime(),
+      };
+
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        toast.warning("No changes to update", {
+          position: "top-center",
+        });
+        return;
+      }
+    }
+
+    try {
+      await submitBid({
+        rfqId,
+        carrierName: values.carrierName,
+        freightCharges: values.freightCharges,
+        originCharges: values.originCharges,
+        destinationCharges: values.destinationCharges,
+        transitTime: values.transitTime,
+        quoteValidityAt: new Date(values.quoteValidityAt).getTime(),
+      });
+      toast.success("Bid submitted successfully", {
+        position: "top-center",
+      });
+    } catch (err) {
+      if (err instanceof ConvexError && err.data.kind === "RateLimited") {
+        const retryAfter = err.data.retryAfter;
+
+        const duration = intervalToDuration({
+          start: 0,
+          end: retryAfter,
+        });
+
+        const formatted = formatDuration(duration, {
+          format: ["hours", "minutes", "seconds"],
+          zero: false,
+        });
+
+        toast.error(`You're acting too fast. Try again in ${formatted}.`, {
+          position: "top-center",
+        });
+
+        return;
+      }
+
+      let errorMessage = "Failed to create auction";
+      if (err instanceof ConvexError) {
+        errorMessage = err.data;
+        setServerError(errorMessage);
+      }
+
+      toast.error(errorMessage, {
+        position: "top-center",
+      });
+    }
+  }
 
   return (
     <main className="app-shell text-foreground">
       <Header />
       <section className="border-b border-white/10">
-        <div className="mx-auto max-w-6xl px-6 py-8">
+        <div className="mx-auto max-w-7xl px-6 py-8 w-full">
           <Button asChild size="sm" variant="outline">
             <Link href="/auctions">
               <IconArrowLeft />
@@ -220,7 +229,9 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
             <div className="grid w-full grid-cols-2 gap-3 lg:max-w-xl lg:grid-cols-2">
               <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription className="text-sm">Current L1</CardDescription>
+                  <CardDescription className="text-sm">
+                    Current L1
+                  </CardDescription>
                   <CardTitle className="font-sans text-xl">
                     {rfq.currentLowestAmount === undefined
                       ? "No bids"
@@ -230,7 +241,9 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
               </Card>
               <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription className="text-sm">Current close</CardDescription>
+                  <CardDescription className="text-sm">
+                    Current close
+                  </CardDescription>
                   <CardTitle className="font-sans text-base">
                     {dateTime.format(new Date(rfq.currentBidCloseAt))}
                   </CardTitle>
@@ -238,7 +251,9 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
               </Card>
               <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription className="text-sm">Forced close</CardDescription>
+                  <CardDescription className="text-sm">
+                    Forced close
+                  </CardDescription>
                   <CardTitle className="font-sans text-base">
                     {dateTime.format(new Date(rfq.forcedBidCloseAt))}
                   </CardTitle>
@@ -246,8 +261,12 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
               </Card>
               <Card className="surface-panel rounded-2xl py-2" size="sm">
                 <CardHeader>
-                  <CardDescription className="text-sm">Extensions</CardDescription>
-                  <CardTitle className="font-sans text-xl">{rfq.extensionCount}</CardTitle>
+                  <CardDescription className="text-sm">
+                    Extensions
+                  </CardDescription>
+                  <CardTitle className="font-sans text-xl">
+                    {rfq.extensionCount}
+                  </CardTitle>
                 </CardHeader>
               </Card>
             </div>
@@ -268,164 +287,157 @@ export function RfqDetails({ rfqId }: { rfqId: Id<"rfqs"> }) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form action={submitFromForm}>
+              <form onSubmit={form.handleSubmit(onSubmit)}>
                 <FieldGroup>
-                  <Field data-invalid={Boolean(errors.carrierName)}>
-                    <FieldLabel className="text-base" htmlFor="carrierName">
-                      Carrier name
-                    </FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.carrierName)}
-                      disabled={!isActive}
-                      id="carrierName"
-                      name="carrierName"
-                      onChange={(event) =>
-                        setForm({ ...form, carrierName: event.target.value })
-                      }
-                      value={form.carrierName}
-                    />
-                    <FieldError>{errors.carrierName}</FieldError>
-                  </Field>
+                  <Controller
+                    name="carrierName"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel>Carrier name</FieldLabel>
+                        <Input {...field} disabled={!isActive} />
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
 
                   <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-                    <Field data-invalid={Boolean(errors.freightCharges)}>
-                      <FieldLabel htmlFor="freightCharges">
-                        Freight charges
-                      </FieldLabel>
-                      <Input
-                        aria-invalid={Boolean(errors.freightCharges)}
-                        disabled={!isActive}
-                        id="freightCharges"
-                        min="0"
-                        name="freightCharges"
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            freightCharges: event.target.value,
-                          })
-                        }
-                        type="number"
-                        value={form.freightCharges}
-                      />
-                      <FieldError>{errors.freightCharges}</FieldError>
-                    </Field>
-                    <Field data-invalid={Boolean(errors.originCharges)}>
-                      <FieldLabel htmlFor="originCharges">
-                        Origin charges
-                      </FieldLabel>
-                      <Input
-                        aria-invalid={Boolean(errors.originCharges)}
-                        disabled={!isActive}
-                        id="originCharges"
-                        min="0"
-                        name="originCharges"
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            originCharges: event.target.value,
-                          })
-                        }
-                        type="number"
-                        value={form.originCharges}
-                      />
-                      <FieldError>{errors.originCharges}</FieldError>
-                    </Field>
-                    <Field data-invalid={Boolean(errors.destinationCharges)}>
-                      <FieldLabel htmlFor="destinationCharges">
-                        Destination charges
-                      </FieldLabel>
-                      <Input
-                        aria-invalid={Boolean(errors.destinationCharges)}
-                        disabled={!isActive}
-                        id="destinationCharges"
-                        min="0"
-                        name="destinationCharges"
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            destinationCharges: event.target.value,
-                          })
-                        }
-                        type="number"
-                        value={form.destinationCharges}
-                      />
-                      <FieldError>{errors.destinationCharges}</FieldError>
-                    </Field>
+                    <Controller
+                      name="freightCharges"
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                          <FieldLabel>Freight charges</FieldLabel>
+                          <Input
+                            type="number"
+                            {...field}
+                            disabled={!isActive}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
+                          />
+                          {fieldState.error && (
+                            <FieldError errors={[fieldState.error]} />
+                          )}
+                        </Field>
+                      )}
+                    />
+
+                    <Controller
+                      name="originCharges"
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                          <FieldLabel>Origin charges</FieldLabel>
+                          <Input
+                            type="number"
+                            {...field}
+                            disabled={!isActive}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
+                          />
+                          {fieldState.error && (
+                            <FieldError errors={[fieldState.error]} />
+                          )}
+                        </Field>
+                      )}
+                    />
+
+                    <Controller
+                      name="destinationCharges"
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                          <FieldLabel>Destination charges</FieldLabel>
+                          <Input
+                            type="number"
+                            {...field}
+                            disabled={!isActive}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
+                          />
+                          {fieldState.error && (
+                            <FieldError errors={[fieldState.error]} />
+                          )}
+                        </Field>
+                      )}
+                    />
                   </div>
 
                   <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Total quote</span>
+                    <div className="flex justify-between">
+                      <span>Total quote</span>
                       <span className="font-semibold">
-                        {Number.isFinite(totalPreview)
-                          ? money.format(totalPreview)
-                          : "-"}
+                        {money.format(total)}
                       </span>
                     </div>
-                    {currentUserBid ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Current total:{" "}
-                        {money.format(currentUserBid.totalAmount)}
+
+                    {existingTotal && (
+                      <p className="text-xs text-muted-foreground">
+                        Current total: {money.format(existingTotal)}
                       </p>
-                    ) : null}
-                    <FieldError>{errors.total}</FieldError>
+                    )}
                   </div>
 
-                  <Field data-invalid={Boolean(errors.transitTime)}>
-                    <FieldLabel className="text-base" htmlFor="transitTime">
-                      Transit time (days)
-                    </FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.transitTime)}
-                      disabled={!isActive}
-                      id="transitTime"
-                      type="number"
-                      name="transitTime"
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          transitTime: Number(event.target.value),
-                        })
-                      }
-                      value={form.transitTime}
-                    />
-                    <FieldError>{errors.transitTime}</FieldError>
-                  </Field>
+                  <Controller
+                    name="transitTime"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel>Transit time (days)</FieldLabel>
+                        <Input
+                          type="number"
+                          {...field}
+                          disabled={!isActive}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
+                        />
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
 
-                  <Field data-invalid={Boolean(errors.quoteValidityAt)}>
-                    <FieldLabel htmlFor="quoteValidityAt">
-                      Quote validity
-                    </FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.quoteValidityAt)}
-                      disabled={!isActive}
-                      id="quoteValidityAt"
-                      name="quoteValidityAt"
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          quoteValidityAt: event.target.value,
-                        })
-                      }
-                      type="datetime-local"
-                      value={form.quoteValidityAt}
-                    />
-                    <FieldError>{errors.quoteValidityAt}</FieldError>
-                  </Field>
+                  <Controller
+                    name="quoteValidityAt"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel>Quote validity</FieldLabel>
+                        <Input
+                          type="datetime-local"
+                          {...field}
+                          disabled={!isActive}
+                          min={toDateTimeLocal(new Date())}
+                        />
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
 
                   {serverError ? (
-                    <FieldError className="rounded-lg border border-destructive/20 bg-destructive/10 p-3">
-                      {serverError}
-                    </FieldError>
+                    <FieldError errors={[{ message: serverError }]} />
                   ) : null}
 
                   <Button
-                    className="h-11 w-full text-base"
-                    disabled={!canSubmit}
+                    className="h-11 w-full text-base cursor-pointer"
+                    disabled={
+                      !form.formState.isValid ||
+                      form.formState.isSubmitting ||
+                      !isActive
+                    }
                     type="submit"
                   >
                     {currentUserBid ? <IconEdit /> : <IconSend />}
-                    {isSaving
+                    {form.formState.isSubmitting
                       ? "Saving..."
                       : currentUserBid
                         ? "Update Quote"

@@ -29,13 +29,28 @@ import {
 } from "@/components/ui/select";
 
 import { Header } from "./header";
-import { dateTime, toDateTimeLocal } from "@/lib/utils";
+import { toDateTimeLocal } from "@/lib/utils";
 import { AuctionLists } from "./auction-lists";
+import { z } from "zod";
+import { rfqListingFormSchema } from "../lib/rfq-listing-schema";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  addMinutes,
+  addDays,
+  intervalToDuration,
+  formatDuration,
+} from "date-fns";
+import { toast } from "sonner";
+import { ConvexError } from "convex/values";
 
-type ExtensionTrigger = "bid_received" | "any_rank_change" | "l1_rank_change";
-type FormErrors = Partial<Record<string, string>>;
-
-function MetricPill({ label, value }: { label: string; value: string | number }) {
+function MetricPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
   return (
     <div className="surface-panel flex min-h-16 items-center justify-between gap-4 rounded-2xl px-5 py-3 border border-white/10 shadow">
       <span className="text-sm font-medium text-muted-foreground">{label}</span>
@@ -46,116 +61,96 @@ function MetricPill({ label, value }: { label: string; value: string | number })
   );
 }
 
-function parseLocalDateTime(value: FormDataEntryValue | null) {
-  return typeof value === "string" && value ? new Date(value).getTime() : NaN;
-}
+type FormValues = z.infer<typeof rfqListingFormSchema>;
 
-function textValue(value: FormDataEntryValue | null) {
-  return typeof value === "string" ? value.trim() : "";
-}
+const defaultValues: FormValues = {
+  name: "",
+  referenceId: "",
+  bidStartAt: toDateTimeLocal(new Date()),
+  bidCloseAt: toDateTimeLocal(addMinutes(new Date(), 30)),
+  forcedBidCloseAt: toDateTimeLocal(addMinutes(new Date(), 60)),
 
-function validateCreateForm(data: FormData, startAt: number): FormErrors {
-  const errors: FormErrors = {};
-  const name = textValue(data.get("name"));
-  const referenceId = textValue(data.get("referenceId"));
-  const bidCloseAt = parseLocalDateTime(data.get("bidCloseAt"));
-  const forcedBidCloseAt = parseLocalDateTime(data.get("forcedBidCloseAt"));
-  const pickupServiceAt = parseLocalDateTime(data.get("pickupServiceAt"));
-  const triggerWindowMinutes = Number(data.get("triggerWindowMinutes"));
-  const extensionDurationMinutes = Number(data.get("extensionDurationMinutes"));
-
-  if (!name) {
-    errors.name = "RFQ name is required.";
-  }
-  if (!referenceId) {
-    errors.referenceId = "Reference ID is required.";
-  }
-  if (!Number.isFinite(bidCloseAt)) {
-    errors.bidCloseAt = "Bid close time is required.";
-  } else if (bidCloseAt <= startAt) {
-    errors.bidCloseAt = "Bid close time must be after the start time.";
-  }
-  if (!Number.isFinite(forcedBidCloseAt)) {
-    errors.forcedBidCloseAt = "Forced close time is required.";
-  } else if (forcedBidCloseAt <= bidCloseAt) {
-    errors.forcedBidCloseAt =
-      "Forced close time must be later than bid close time.";
-  }
-  if (!Number.isFinite(pickupServiceAt)) {
-    errors.pickupServiceAt = "Pickup/service date is required.";
-  }
-  if (!Number.isFinite(triggerWindowMinutes) || triggerWindowMinutes <= 0) {
-    errors.triggerWindowMinutes = "Trigger window must be greater than zero.";
-  }
-  if (
-    !Number.isFinite(extensionDurationMinutes) ||
-    extensionDurationMinutes <= 0
-  ) {
-    errors.extensionDurationMinutes =
-      "Extension duration must be greater than zero.";
-  }
-
-  return errors;
-}
+  pickupServiceAt: toDateTimeLocal(addDays(new Date(), 7)),
+  triggerWindowMinutes: 10,
+  extensionDurationMinutes: 5,
+  extensionTrigger: "bid_received",
+};
 
 export function RfqListing() {
   const rfqs = useQuery(api.rfqs.list);
   const createRfq = useMutation(api.rfqs.create);
-  const [errors, setErrors] = useState<FormErrors>({});
+
   const [serverError, setServerError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [extensionTrigger, setExtensionTrigger] =
-    useState<ExtensionTrigger>("bid_received");
-  const [defaults, setDefaults] = useState(() => {
-    const now = new Date();
-    return {
+
+  const now = new Date();
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(rfqListingFormSchema),
+    mode: "onChange",
+    defaultValues: {
+      ...defaultValues,
       referenceId: `RFQ-${now.getTime().toString().slice(-6)}`,
-      startAtLabel: dateTime.format(now),
-      bidCloseAt: toDateTimeLocal(new Date(now.getTime() + 30 * 60 * 1000)),
-      forcedBidCloseAt: toDateTimeLocal(
-        new Date(now.getTime() + 60 * 60 * 1000),
-      ),
-      pickupServiceAt: toDateTimeLocal(
-        new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
-      ),
-    };
+    },
   });
 
-  async function createFromForm(data: FormData) {
-    const bidStartAt = Date.now();
-    const nextErrors = validateCreateForm(data, bidStartAt);
-    setErrors(nextErrors);
+  async function onSubmit(values: FormValues) {
     setServerError(null);
 
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
-
-    setIsSaving(true);
     try {
       await createRfq({
-        name: textValue(data.get("name")),
-        referenceId: textValue(data.get("referenceId")),
-        bidStartAt,
-        bidCloseAt: parseLocalDateTime(data.get("bidCloseAt")),
-        forcedBidCloseAt: parseLocalDateTime(data.get("forcedBidCloseAt")),
-        pickupServiceAt: parseLocalDateTime(data.get("pickupServiceAt")),
-        triggerWindowMinutes: Number(data.get("triggerWindowMinutes")),
-        extensionDurationMinutes: Number(data.get("extensionDurationMinutes")),
-        extensionTrigger,
+        name: values.name,
+        referenceId: values.referenceId,
+
+        bidStartAt: new Date(values.bidStartAt).getTime(),
+        bidCloseAt: new Date(values.bidCloseAt).getTime(),
+        forcedBidCloseAt: new Date(values.forcedBidCloseAt).getTime(),
+        pickupServiceAt: new Date(values.pickupServiceAt).getTime(),
+
+        triggerWindowMinutes: values.triggerWindowMinutes,
+        extensionDurationMinutes: values.extensionDurationMinutes,
+        extensionTrigger: values.extensionTrigger,
       });
+
       const now = new Date();
-      setDefaults((current) => ({
-        ...current,
+
+      form.reset({
+        ...defaultValues,
         referenceId: `RFQ-${now.getTime().toString().slice(-6)}`,
-        startAtLabel: dateTime.format(now),
-      }));
-    } catch (caught) {
-      setServerError(
-        caught instanceof Error ? caught.message : "Unable to create RFQ.",
-      );
-    } finally {
-      setIsSaving(false);
+      });
+
+      toast.success("Auction created successfully", {
+        position: "top-center",
+      });
+    } catch (err) {
+      if (err instanceof ConvexError && err.data.kind === "RateLimited") {
+        const retryAfter = err.data.retryAfter; 
+
+        const duration = intervalToDuration({
+          start: 0,
+          end: retryAfter,
+        });
+
+        const formatted = formatDuration(duration, {
+          format: ["hours", "minutes", "seconds"],
+          zero: false,
+        });
+
+        toast.error(`You're acting too fast. Try again in ${formatted}.`, {
+          position: "top-center",
+        });
+
+        return;
+      }
+
+      let errorMessage = "Failed to create auction";
+      if (err instanceof ConvexError) {
+        errorMessage = err.data;
+        setServerError(errorMessage);
+      }
+
+      toast.error(errorMessage, {
+        position: "top-center",
+      });
     }
   }
 
@@ -196,167 +191,268 @@ export function RfqListing() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[390px_1fr]">
+      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[390px_1fr]">
         <Card className="surface-panel h-fit rounded-2xl">
           <CardHeader>
-            <CardTitle className="font-sans text-2xl">Create British Auction</CardTitle>
+            <CardTitle className="font-sans text-2xl">
+              Create British Auction
+            </CardTitle>
             <CardDescription className="text-base">
               Start time is locked to the current time when the RFQ is created.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={createFromForm}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
               <FieldGroup>
-                <Field data-invalid={Boolean(errors.name)}>
-                  <FieldLabel htmlFor="name">RFQ name</FieldLabel>
-                  <Input
-                    aria-invalid={Boolean(errors.name)}
-                    defaultValue="Mumbai to Singapore Ocean Freight"
-                    id="name"
-                    name="name"
-                  />
-                  <FieldError>{errors.name}</FieldError>
-                </Field>
+                <Controller
+                  name="name"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="name">RFQ name</FieldLabel>
 
-                <Field data-invalid={Boolean(errors.referenceId)}>
-                  <FieldLabel htmlFor="referenceId">Reference ID</FieldLabel>
-                  <Input
-                    aria-invalid={Boolean(errors.referenceId)}
-                    defaultValue={defaults.referenceId}
-                    id="referenceId"
-                    name="referenceId"
-                    key={defaults.referenceId}
-                    readOnly
-                    value={defaults.referenceId}
-                    className="cursor-not-allowed"
-                  />
-                  <FieldError>{errors.referenceId}</FieldError>
-                </Field>
+                      <Input
+                        {...field}
+                        aria-invalid={fieldState.invalid}
+                        defaultValue="Mumbai to Singapore Ocean Freight"
+                        id="name"
+                        name="name"
+                      />
 
-                <Field>
-                  <FieldLabel>Bid start</FieldLabel>
-                  <Input
-                    disabled
-                    className="cursor-not-allowed"
-                    value={defaults.startAtLabel}
-                  />
-                  <FieldDescription>
-                    Captured from the current clock at submit time.
-                  </FieldDescription>
-                </Field>
+                      {fieldState.error && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field data-invalid={Boolean(errors.bidCloseAt)}>
-                    <FieldLabel htmlFor="bidCloseAt">Bid close</FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.bidCloseAt)}
-                      defaultValue={defaults.bidCloseAt}
-                      id="bidCloseAt"
-                      name="bidCloseAt"
-                      type="datetime-local"
-                    />
-                    <FieldError>{errors.bidCloseAt}</FieldError>
-                  </Field>
-                  <Field data-invalid={Boolean(errors.forcedBidCloseAt)}>
-                    <FieldLabel htmlFor="forcedBidCloseAt">
-                      Forced close
-                    </FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.forcedBidCloseAt)}
-                      defaultValue={defaults.forcedBidCloseAt}
-                      id="forcedBidCloseAt"
-                      name="forcedBidCloseAt"
-                      type="datetime-local"
-                    />
-                    <FieldError>{errors.forcedBidCloseAt}</FieldError>
-                  </Field>
-                </div>
+                <Controller
+                  name="referenceId"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="referenceId">
+                        Reference ID
+                      </FieldLabel>
 
-                <Field data-invalid={Boolean(errors.pickupServiceAt)}>
-                  <FieldLabel htmlFor="pickupServiceAt">
-                    Pickup/service date
-                  </FieldLabel>
-                  <Input
-                    aria-invalid={Boolean(errors.pickupServiceAt)}
-                    defaultValue={defaults.pickupServiceAt}
-                    id="pickupServiceAt"
-                    name="pickupServiceAt"
-                    type="datetime-local"
-                  />
-                  <FieldError>{errors.pickupServiceAt}</FieldError>
-                </Field>
+                      <Input
+                        {...field}
+                        id="referenceId"
+                        readOnly
+                        className="cursor-not-allowed"
+                        aria-invalid={fieldState.invalid}
+                      />
+
+                      {fieldState.error && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+
+                <Controller
+                  name="bidStartAt"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="bidStartAt">
+                        Bid start time
+                      </FieldLabel>
+
+                      <Input
+                        {...field}
+                        type="datetime-local"
+                        id="bidStartAt"
+                        min={toDateTimeLocal(new Date())}
+                        aria-invalid={fieldState.invalid}
+                      />
+
+                      <FieldDescription>
+                        Must be scheduled in the future.
+                      </FieldDescription>
+
+                      {fieldState.error && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field data-invalid={Boolean(errors.triggerWindowMinutes)}>
-                    <FieldLabel htmlFor="triggerWindowMinutes">
-                      Trigger window X (minutes)
-                    </FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.triggerWindowMinutes)}
-                      defaultValue="10"
-                      id="triggerWindowMinutes"
-                      min="1"
-                      name="triggerWindowMinutes"
-                      type="number"
-                    />
-                    <FieldError>{errors.triggerWindowMinutes}</FieldError>
-                  </Field>
-                  <Field
-                    data-invalid={Boolean(errors.extensionDurationMinutes)}
-                  >
-                    <FieldLabel htmlFor="extensionDurationMinutes">
-                      Extension Y (minutes)
-                    </FieldLabel>
-                    <Input
-                      aria-invalid={Boolean(errors.extensionDurationMinutes)}
-                      defaultValue="5"
-                      id="extensionDurationMinutes"
-                      min="1"
-                      name="extensionDurationMinutes"
-                      type="number"
-                    />
-                    <FieldError>{errors.extensionDurationMinutes}</FieldError>
-                  </Field>
+                  <Controller
+                    name="bidCloseAt"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="bidCloseAt">Bid close</FieldLabel>
+
+                        <Input
+                          {...field}
+                          type="datetime-local"
+                          id="bidCloseAt"
+                          aria-invalid={fieldState.invalid}
+                        />
+
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="forcedBidCloseAt"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="forcedBidCloseAt">
+                          Forced close
+                        </FieldLabel>
+
+                        <Input
+                          {...field}
+                          type="datetime-local"
+                          id="forcedBidCloseAt"
+                          aria-invalid={fieldState.invalid}
+                        />
+
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
                 </div>
 
-                <Field>
-                  <FieldLabel>Extension trigger</FieldLabel>
-                  <Select
-                    value={extensionTrigger}
-                    onValueChange={(value) =>
-                      setExtensionTrigger(value as ExtensionTrigger)
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="bid_received">
-                        Bid received in last X minutes
-                      </SelectItem>
-                      <SelectItem value="any_rank_change">
-                        Any supplier rank change
-                      </SelectItem>
-                      <SelectItem value="l1_rank_change">
-                        Lowest bidder rank change
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
+                <Controller
+                  name="pickupServiceAt"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="pickupServiceAt">
+                        Pickup/service date
+                      </FieldLabel>
+
+                      <Input
+                        {...field}
+                        type="datetime-local"
+                        id="pickupServiceAt"
+                        aria-invalid={fieldState.invalid}
+                      />
+
+                      {fieldState.error && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Controller
+                    name="triggerWindowMinutes"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="triggerWindowMinutes">
+                          Trigger window X (minutes)
+                        </FieldLabel>
+
+                        <Input
+                          {...field}
+                          type="number"
+                          min={1}
+                          id="triggerWindowMinutes"
+                          aria-invalid={fieldState.invalid}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
+                        />
+
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="extensionDurationMinutes"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="extensionDurationMinutes">
+                          Extension Y (minutes)
+                        </FieldLabel>
+
+                        <Input
+                          {...field}
+                          type="number"
+                          min={1}
+                          id="extensionDurationMinutes"
+                          aria-invalid={fieldState.invalid}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
+                        />
+
+                        {fieldState.error && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+                </div>
+
+                <Controller
+                  name="extensionTrigger"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel>Extension trigger</FieldLabel>
+
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          <SelectItem value="bid_received">
+                            Bid received in last X minutes
+                          </SelectItem>
+                          <SelectItem value="any_rank_change">
+                            Any supplier rank change
+                          </SelectItem>
+                          <SelectItem value="l1_rank_change">
+                            Lowest bidder rank change
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {fieldState.error && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
 
                 {serverError ? (
-                  <FieldError className="rounded-lg border border-destructive/20 bg-destructive/10 p-3">
-                    {serverError}
-                  </FieldError>
+                  <FieldError errors={[{ message: serverError }]} />
                 ) : null}
 
                 <Button
                   className="h-11 w-full cursor-pointer text-base"
-                  disabled={isSaving}
+                  disabled={
+                    !form.formState.isValid || form.formState.isSubmitting
+                  }
                   type="submit"
                 >
                   <IconPlus />
-                  {isSaving ? "Creating..." : "Create Auction"}
+                  {form.formState.isSubmitting
+                    ? "Creating..."
+                    : "Create Auction"}
                 </Button>
               </FieldGroup>
             </form>

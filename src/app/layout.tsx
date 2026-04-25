@@ -5,6 +5,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "@/Providers/clerk-convex-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/Providers/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   variable: "--font-body",
@@ -19,8 +20,8 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "British Auction RFQ",
-  description: "Real-time British Auction RFQ system",
+  title: "BidBuddy: British Auction RFQ",
+  description: "Real time British Auction RFQ system",
 };
 
 export default function RootLayout({
@@ -43,7 +44,9 @@ export default function RootLayout({
         >
           <ClerkProvider>
             <ConvexClientProvider>
-              <TooltipProvider>{children}</TooltipProvider>
+              <TooltipProvider>
+                {children} <Toaster />
+              </TooltipProvider>
             </ConvexClientProvider>
           </ClerkProvider>
         </ThemeProvider>

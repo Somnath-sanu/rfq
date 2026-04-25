@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
   assertPositiveMoney,
@@ -10,6 +10,7 @@ import {
   writeLog,
 } from "./rfqHelpers";
 import { extensionTriggerValidator, minuteMs } from "./rfqTypes";
+import { rateLimiter } from "./rateLimiter";
 
 export const list = query({
   args: {},
@@ -17,7 +18,7 @@ export const list = query({
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new Error("you must be signed in");
+      throw new ConvexError("you must be signed in");
     }
 
     const rfqs = await ctx.db
@@ -46,8 +47,8 @@ export const get = query({
     const identity = await ctx.auth.getUserIdentity();
 
     if (!identity) {
-      throw new Error("you must be signed in");
-    } 
+      throw new ConvexError("you must be signed in");
+    }
 
     const rfq = await ctx.db.get(args.rfqId);
     if (!rfq) {
@@ -117,29 +118,35 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("You must be signed in.");
+      throw new ConvexError("You must be signed in.");
     }
+
+    await rateLimiter.limit(ctx, "createRfq", {
+      key: identity.tokenIdentifier,
+      throws: true,
+    });
+
     const now = Date.now();
 
     if (!args.name.trim()) {
-      throw new Error("RFQ name is required.");
+      throw new ConvexError("RFQ name is required.");
     }
     if (!args.referenceId.trim()) {
-      throw new Error("Reference ID is required.");
+      throw new ConvexError("Reference ID is required.");
     }
     if (args.bidStartAt >= args.bidCloseAt) {
-      throw new Error("Bid start time must be before bid close time.");
+      throw new ConvexError("Bid start time must be before bid close time.");
     }
     if (args.forcedBidCloseAt <= args.bidCloseAt) {
-      throw new Error(
+      throw new ConvexError(
         "Forced bid close time must be later than bid close time.",
       );
     }
     if (args.triggerWindowMinutes <= 0) {
-      throw new Error("Trigger window must be greater than zero.");
+      throw new ConvexError("Trigger window must be greater than zero.");
     }
     if (args.extensionDurationMinutes <= 0) {
-      throw new Error("Extension duration must be greater than zero.");
+      throw new ConvexError("Extension duration must be greater than zero.");
     }
 
     const duplicate = await ctx.db
@@ -149,7 +156,7 @@ export const create = mutation({
       )
       .unique();
     if (duplicate) {
-      throw new Error("Reference ID already exists.");
+      throw new ConvexError("Reference ID already exists.");
     }
 
     const status = statusForTimes(
@@ -217,15 +224,21 @@ export const submitBid = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("You must be signed in.");
+      throw new ConvexError("You must be signed in.");
     }
+
+    await rateLimiter.limit(ctx, "submitBid", {
+      key: identity.tokenIdentifier,
+      throws: true,
+    });
+
     const supplierName =
       identity.name ?? identity.nickname ?? identity.givenName;
     const supplierEmail = identity.email;
     const now = Date.now();
     const rfq = await ctx.db.get(args.rfqId);
     if (!rfq) {
-      throw new Error("RFQ not found.");
+      throw new ConvexError("RFQ not found.");
     }
 
     const liveStatus = statusForTimes(
@@ -235,10 +248,12 @@ export const submitBid = mutation({
       rfq.forcedBidCloseAt,
     );
     if (liveStatus !== "active" || rfq.status !== "active") {
-      throw new Error("Bidding is only allowed while the auction is active.");
+      throw new ConvexError(
+        "Bidding is only allowed while the auction is active.",
+      );
     }
     if (now >= rfq.currentBidCloseAt || now >= rfq.forcedBidCloseAt) {
-      throw new Error("Bidding has closed for this RFQ.");
+      throw new ConvexError("Bidding has closed for this RFQ.");
     }
 
     assertPositiveMoney(args.freightCharges, "Freight charges");
@@ -246,13 +261,13 @@ export const submitBid = mutation({
     assertPositiveMoney(args.destinationCharges, "Destination charges");
 
     if (!args.carrierName.trim()) {
-      throw new Error("Carrier name is required.");
+      throw new ConvexError("Carrier name is required.");
     }
     if (!args.transitTime) {
-      throw new Error("Transit time is required.");
+      throw new ConvexError("Transit time is required.");
     }
     if (args.quoteValidityAt <= now) {
-      throw new Error("Quote validity must be in the future.");
+      throw new ConvexError("Quote validity must be in the future.");
     }
     const transitTime = args.transitTime;
 
@@ -261,7 +276,7 @@ export const submitBid = mutation({
       .withIndex("by_rfqId", (q) => q.eq("rfqId", args.rfqId))
       .unique();
     if (!config) {
-      throw new Error("Auction configuration is missing.");
+      throw new ConvexError("Auction configuration is missing.");
     }
 
     const totalAmount =
@@ -272,7 +287,9 @@ export const submitBid = mutation({
       identity.tokenIdentifier,
     );
     if (existingBid && totalAmount > existingBid.totalAmount) {
-      throw new Error("Updated bids must keep or lower the current total.");
+      throw new ConvexError(
+        "Updated bids must keep or lower the current total.",
+      );
     }
 
     const previousRanked = await getRankedBids(ctx, args.rfqId, 200);

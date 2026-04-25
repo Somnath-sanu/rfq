@@ -1,14 +1,14 @@
 import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
 
-const crons = cronJobs();
+const crons = cronJobs(); 
 
-// crons.interval(
-//   "activate scheduled british auctions",
-//   { minutes: 1 },
-//   internal.internalMutations.activateScheduledAuctions,
-//   {},
-// );
+crons.interval(
+  "activate scheduled british auctions",
+  { minutes: 1 },
+  internal.internalMutations.activateScheduledAuctions,
+  {},
+);
 
 crons.interval(
   "close expired british auctions",

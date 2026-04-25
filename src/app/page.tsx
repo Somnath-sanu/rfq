@@ -27,7 +27,7 @@ export default function Home() {
           className="font-heading text-3xl tracking-tight text-white"
           href="/"
         >
-          BidBuddy<sup className="text-xs">&reg;</sup>
+          BidBuddy<sup className="text-xs"></sup>
         </Link>
         <Unauthenticated>
           <Button
